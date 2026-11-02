@@ -82,14 +82,16 @@ def supplementary_urls(soft_path):
 
 
 def head_size(url):
+    """Content-Length in bytes, or -1 if the server never answered. GEO drops some
+    HEAD requests under load, so retry with backoff."""
     req = urllib.request.Request(url, method="HEAD", headers=UA)
-    for _ in range(3):
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 length = resp.headers.get("Content-Length")
                 return int(length) if length is not None else -1
         except Exception:  # noqa: BLE001
-            time.sleep(2)
+            time.sleep(2 * (attempt + 1))
     return -1
 
 
@@ -109,6 +111,8 @@ def download_one(item, out_dir, expected_size):
     gsm, url = item
     fname = os.path.basename(url)
     dest = os.path.join(out_dir, fname)
+    if expected_size < 0:
+        expected_size = head_size(url)  # second chance after the bulk HEAD pass
     if expected_size > 0 and os.path.exists(dest) and os.path.getsize(dest) == expected_size:
         return "cached", dest, expected_size, None
     cmd = ["curl", "-sS", "-L", "-A", "Mozilla/5.0", "--retry", "8", "--retry-delay", "10", "--retry-all-errors",
@@ -116,8 +120,10 @@ def download_one(item, out_dir, expected_size):
     for attempt in range(3):
         rc = subprocess.call(cmd)
         size = os.path.getsize(dest) if os.path.exists(dest) else 0
-        if rc == 0 and (expected_size <= 0 or size == expected_size):
+        if rc == 0 and expected_size >= 0 and size == expected_size:
             return "downloaded", dest, size, sha256_of(dest)
+        if rc == 0 and expected_size < 0:
+            return "downloaded_size_unverified", dest, size, sha256_of(dest)
         if rc == 0 and expected_size > 0 and size > expected_size:
             # resume on a changed/corrupt partial file: start over
             os.remove(dest)
@@ -167,7 +173,7 @@ def main():
 
         print(f"   {len(items)} files selected; fetching sizes")
         sizes = {}
-        with ThreadPoolExecutor(max_workers=8) as ex:
+        with ThreadPoolExecutor(max_workers=4) as ex:
             futs = {ex.submit(head_size, url): url for _, url in items}
             for f in as_completed(futs):
                 sizes[futs[f]] = f.result()
@@ -176,7 +182,8 @@ def main():
         print(f"   total {total / 1e9:.2f} GB")
         for gsm, url in items:
             s = sizes.get(url, -1)
-            print(f"   {s / 1e9:9.3f} GB  {gsm}  {os.path.basename(url)}")
+            size_txt = f"{s / 1e9:9.3f} GB" if s >= 0 else "  unknown   "
+            print(f"   {size_txt}  {gsm}  {os.path.basename(url)}")
         if args.dry_run:
             continue
 

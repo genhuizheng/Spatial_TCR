@@ -1,0 +1,8 @@
+# raw and derived data live on TACC $SCRATCH, never in git
+data/
+logs/
+outputs/
+__pycache__/
+*.pyc
+# SCP bulk-download configs carry signed URLs
+cfg*.txt

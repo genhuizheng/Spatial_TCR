@@ -13,7 +13,7 @@ verifies sizes (and digests where the source publishes them) and appends to a
 
 | Target | Source | Size (first pass) | Notes |
 |---|---|---|---|
-| GSE300147 (Xenium HNSCC + patient-specific CDR3 probes, McCord 2026) | GEO | ~7 GB without images | 18 samples. Morphology `.ome.tif.gz` (~41 GB) excluded in pass 1; one of them (GSM9054480) is a 0-byte author upload anyway. |
+| GSE300147 (Xenium HNSCC + patient-specific CDR3 probes, McCord 2026) | GEO | ~56 GB per-sample files | 18 samples, incl. morphology `.ome.tif.gz` and 14 newer `.tif.gz` images. GSE*_RAW.tar is excluded because it repeats the per-sample files. |
 | GSE287301 (matched scRNA + scTCR, 28 HNSCC patients) | GEO | unknown until dry-run | Needed to link probe CDR3s to full clonotypes and patients. |
 | GSE285951 (matched PBMC TCR) | GEO | unknown until dry-run | Lower priority; small. |
 | GSE238071 (SPTCR-seq spot-level TCR tables, 9 GBM) | GEO | 70 MB | GSM7658221 (UKF260) is a 0-byte author upload. |
@@ -25,7 +25,7 @@ verifies sizes (and digests where the source publishes them) and appends to a
 | In situ sequencing TCR (Magoulopoulou 2026, EBioMedicine) | TissUUmaps servers at SciLifeLab | TBD | No repository; see section 6. |
 
 Skipped on purpose: GSE164177 (non-spatial benchmark), circVDJ-seq / SpaCir-VDJ (preprints, no data yet),
-SCP1348 Puck_object pickles, GSE300147 morphology images (pass 2 if the boundary work needs them).
+SCP1348 Puck_object pickles.
 
 ## 0. One-time setup
 
@@ -50,13 +50,13 @@ python3 --version; curl --version | head -1
 ## 1. GEO: dry-run first (lists every file with size, downloads nothing)
 
 ```bash
-cd /scratch/10119/ghzheng/spatial_TCR && python3 scripts/geo_download.py --out data/raw --cache data/raw/geo_meta --dry-run --exclude morphology GSE300147 GSE287301 GSE285951 GSE238071 GSE179572 2>&1 | tee logs/geo_dryrun_$(date +%Y%m%d).log
+cd /scratch/10119/ghzheng/spatial_TCR && python3 scripts/geo_download.py --out data/raw --cache data/raw/geo_meta --dry-run --exclude "_RAW.tar$" GSE300147 GSE287301 GSE285951 GSE238071 GSE179572 2>&1 | tee logs/geo_dryrun_$(date +%Y%m%d).log
 ```
 
 Paste the `total` lines back. Then the real run, detached:
 
 ```bash
-cd /scratch/10119/ghzheng/spatial_TCR && nohup python3 scripts/geo_download.py --out data/raw --cache data/raw/geo_meta --workers 3 --exclude morphology GSE300147 GSE287301 GSE285951 GSE238071 GSE179572 > logs/geo_download_$(date +%Y%m%d).log 2>&1 &
+cd /scratch/10119/ghzheng/spatial_TCR && nohup python3 scripts/geo_download.py --out data/raw --cache data/raw/geo_meta --workers 3 --exclude "_RAW.tar$" GSE300147 GSE287301 GSE285951 GSE238071 GSE179572 > logs/geo_download_$(date +%Y%m%d).log 2>&1 &
 ```
 
 Progress check:
