@@ -29,11 +29,18 @@ if [ -z "$PYBIN" ]; then
 fi
 echo "python: $PYBIN ($("$PYBIN" --version 2>&1))"
 
+OUT=${OUT:-metadata/RAW_DATA_FORMATS.md}
+INV=${INV:-metadata/raw_file_inventory.tsv}
+DSARG=""
+[ -n "${DATASETS:-}" ] && DSARG="--datasets $DATASETS"
+if [ -e "$OUT" ] && [ -z "${OVERWRITE:-}" ] && [ "$OUT" != "metadata/RAW_DATA_FORMATS.md" ]; then
+    echo "refusing to overwrite existing $OUT (set OVERWRITE=1)"; exit 1
+fi
+
 export TMPDIR=$ROOT/tmp_inspect_$SLURM_JOB_ID
 mkdir -p "$TMPDIR" metadata
-"$PYBIN" scripts/inspect_raw.py --root data/raw \
-    --out metadata/RAW_DATA_FORMATS.md --inventory metadata/raw_file_inventory.tsv
+"$PYBIN" scripts/inspect_raw.py --root data/raw $DSARG --out "$OUT" --inventory "$INV"
 rc=$?
 rm -rf "$TMPDIR"
 echo "inspect_raw exit code: $rc"
-ls -la metadata/RAW_DATA_FORMATS.md metadata/raw_file_inventory.tsv
+ls -la "$OUT" "$INV"

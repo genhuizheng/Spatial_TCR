@@ -714,6 +714,8 @@ def main():
     ap.add_argument("--inventory", required=True)
     ap.add_argument("--per-kind", type=int, default=1,
                     help="representatives inspected per (dataset, file kind); smallest first")
+    ap.add_argument("--datasets", default=None,
+                    help="comma-separated dataset folders to inspect (default: all under --root)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
@@ -721,6 +723,12 @@ def main():
     started = datetime.datetime.now(datetime.timezone.utc)
 
     datasets = sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))
+    if args.datasets:
+        wanted = [d.strip() for d in args.datasets.split(",") if d.strip()]
+        missing = [d for d in wanted if d not in datasets]
+        if missing:
+            print(f"WARNING: not found under {root}: {', '.join(missing)}", file=sys.stderr)
+        datasets = [d for d in datasets if d in wanted]
     inventory = []
     for ds in datasets:
         for dp, _dn, fns in os.walk(os.path.join(root, ds)):

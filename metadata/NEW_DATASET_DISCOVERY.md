@@ -53,6 +53,19 @@ CDR3-probe preprints (no accession), FR3AK-seq (abstract only).
   Published spatial parameters: DBSCAN on CD45+ cells, at least 35 cells within 80 µm; neighborhood
   analyses at 15 µm and "five nearest cells within a 15 µm radius".
 
+## TACC dry-run results (2026-11-02, file lists only, nothing downloaded)
+
+| Series | Files | Size | Consequence |
+|---|---|---|---|
+| GSE328481 | 11 per-chip `.h5ad` | 6.6 GB | small enough to download and inspect for TCR fields |
+| GSE296577 | 20 per-sample tar.gz, Seurat RDS, custom panel, README | 402 GB | read panel + README first |
+| GSE179373 | expression MTX only, no VDJ | 0.2 GB | downgraded: no paired-chain lookup for the brain-mets Visium TCR |
+| GSE280314 | 3 Xenium outs zips, gene panel, H&E with alignment CSV | 68 GB | check panel for CDR3 targets first |
+| PRJNA742564 | 12 FASTQ (ENA, MD5) | 3.2 GB | ready |
+| Zenodo 7961605 | 1 zip (MD5) | 25.6 GB | ready when wanted |
+
+Every GEO series again ships a `*_RAW.tar` that repeats the per-sample files; always exclude it.
+
 ## Commands (user runs on TACC; nothing here has been run)
 
 List files and sizes only:
