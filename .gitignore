@@ -2,6 +2,8 @@
 data/
 logs/
 outputs/
+TCR_raw_data/
+tmp_inspect_*/
 __pycache__/
 *.pyc
 # SCP bulk-download configs carry signed URLs
