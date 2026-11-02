@@ -48,26 +48,60 @@ def to_https(url):
     return url
 
 
+def _open_soft(path):
+    if path.endswith(".gz"):
+        return gzip.open(path, "rt", encoding="utf-8", errors="replace")
+    return open(path, "rt", encoding="utf-8", errors="replace")
+
+
+def _soft_is_valid(path):
+    """A usable SOFT file is non-empty, decompresses, and declares the series."""
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        with _open_soft(path) as fh:
+            head = fh.read(200000)
+        return "^SERIES" in head
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def fetch_soft(acc, cache):
+    """Return a path to a valid SOFT file for acc, or None.
+
+    GEO's FTP mirror sometimes answers 200 with an empty body, so every fetch is
+    validated. After the FTP copy fails, fall back to the acc.cgi text export
+    (same records, brief view, uncompressed)."""
     os.makedirs(cache, exist_ok=True)
-    dest = os.path.join(cache, f"{acc}_family.soft.gz")
-    if os.path.exists(dest) and os.path.getsize(dest) > 0:
-        return dest
-    url = f"{GEO_FTP}/{series_dir(acc)}/{acc}/soft/{acc}_family.soft.gz"
-    for attempt in range(3):
-        try:
-            _download_with_ua(url, dest)
-            return dest
-        except Exception as exc:  # noqa: BLE001
-            print(f"  soft fetch failed ({attempt + 1}/3): {exc}", file=sys.stderr)
-            time.sleep(3)
+    ftp_dest = os.path.join(cache, f"{acc}_family.soft.gz")
+    cgi_dest = os.path.join(cache, f"{acc}_family.soft")
+    for path in (ftp_dest, cgi_dest):
+        if _soft_is_valid(path):
+            return path
+    sources = [
+        (f"{GEO_FTP}/{series_dir(acc)}/{acc}/soft/{acc}_family.soft.gz", ftp_dest),
+        (f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={acc}&targ=all&form=text&view=brief", cgi_dest),
+    ]
+    for url, dest in sources:
+        for attempt in range(4):
+            try:
+                _download_with_ua(url, dest)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  soft fetch error ({attempt + 1}/4) {url}: {exc}", file=sys.stderr)
+            if _soft_is_valid(dest):
+                return dest
+            size = os.path.getsize(dest) if os.path.exists(dest) else -1
+            print(f"  soft fetch gave unusable file ({attempt + 1}/4, {size} bytes): {url}", file=sys.stderr)
+            if os.path.exists(dest):
+                os.remove(dest)
+            time.sleep(5 * (attempt + 1))
     return None
 
 
 def supplementary_urls(soft_path):
     """Yield (gsm_or_series, url) for every supplementary file in a SOFT family file."""
     current = None
-    with gzip.open(soft_path, "rt", encoding="utf-8", errors="replace") as fh:
+    with _open_soft(soft_path) as fh:
         for line in fh:
             if line.startswith("^SERIES"):
                 current = line.split("=", 1)[1].strip()
@@ -171,6 +205,10 @@ def main():
         seen = set()
         items = [it for it in items if not (it[1] in seen or seen.add(it[1]))]
 
+        print(f"   SOFT: {soft}")
+        if not items:
+            print(f"   WARNING: {acc} has no supplementary files in its SOFT record "
+                  f"(data may be SRA/dbGaP only, or the series is not public)", file=sys.stderr)
         print(f"   {len(items)} files selected; fetching sizes")
         sizes = {}
         with ThreadPoolExecutor(max_workers=4) as ex:
