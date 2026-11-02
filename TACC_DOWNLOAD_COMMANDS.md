@@ -67,10 +67,22 @@ tail -5 /scratch/10119/ghzheng/spatial_TCR/logs/geo_download_*.log; grep -c down
 
 Re-running the same command later only fetches what is missing or incomplete.
 
-## 2. Dryad (SPTCR-seq Visium and the rest of the Freiburg multi-omics)
+## 2. Dryad (SPTCR-seq Visium and the rest of the Freiburg multi-omics) -- DONE 2026-11-01
+
+Dryad file downloads now require a bearer token (an unauthenticated request gets
+401 `must have current bearer token`). The local copy in
+`F:\Tcellworldmodel\SPTCR-seq\Data` matched all 7 published SHA-256 digests, so it
+was uploaded with scp instead, and re-verified on TACC (all OK, 2026-11-01):
 
 ```bash
-cd /scratch/10119/ghzheng/spatial_TCR && nohup python3 scripts/dryad_download.py --out data/raw/dryad_h70rxwdmj 10.5061/dryad.h70rxwdmj > logs/dryad_$(date +%Y%m%d).log 2>&1 &
+cd /scratch/10119/ghzheng/spatial_TCR/data/raw/dryad_h70rxwdmj && sha256sum -c ../../../metadata/dryad_h70rxwdmj.sha256
+```
+
+To download from Dryad itself later, create an API account at https://datadryad.org/account,
+then (the secret is read without echo and never appears on a command line):
+
+```bash
+read -r -p "Dryad client id: " DRYAD_CLIENT_ID; read -r -s -p "Dryad secret: " DRYAD_CLIENT_SECRET; echo; export DRYAD_CLIENT_ID DRYAD_CLIENT_SECRET; cd /scratch/10119/ghzheng/spatial_TCR && nohup python3 scripts/dryad_download.py --out data/raw/dryad_h70rxwdmj 10.5061/dryad.h70rxwdmj > logs/dryad_$(date +%Y%m%d).log 2>&1 &
 ```
 
 ## 3. OSF (two SPTCR-related projects, view-only tokens from the paper)
