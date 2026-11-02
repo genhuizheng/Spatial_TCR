@@ -149,19 +149,34 @@ def download_one(item, out_dir, expected_size):
         expected_size = head_size(url)  # second chance after the bulk HEAD pass
     if expected_size > 0 and os.path.exists(dest) and os.path.getsize(dest) == expected_size:
         return "cached", dest, expected_size, None
-    cmd = ["curl", "-sS", "-L", "-A", "Mozilla/5.0", "--retry", "8", "--retry-delay", "10", "--retry-all-errors",
-           "-C", "-", "-o", dest, url]
-    for attempt in range(3):
+
+    def drop_stale():
+        """Remove a leftover that cannot be resumed: bigger than the real file, or a
+        small body that is not the real file (NCBI writes a ~1 KB error page when a
+        transfer is cut). Resuming onto either corrupts the result."""
+        if not os.path.exists(dest):
+            return
+        have = os.path.getsize(dest)
+        if expected_size >= 0 and have == expected_size:
+            return
+        if (expected_size >= 0 and have > expected_size) or have <= 4096:
+            os.remove(dest)
+
+    # --fail: an HTTP error status never gets written into the data file
+    cmd = ["curl", "-sS", "-L", "--fail", "-A", "Mozilla/5.0", "--retry", "8", "--retry-delay", "10",
+           "--retry-all-errors", "-C", "-", "-o", dest, url]
+    for attempt in range(4):
+        drop_stale()
         rc = subprocess.call(cmd)
         size = os.path.getsize(dest) if os.path.exists(dest) else 0
         if rc == 0 and expected_size >= 0 and size == expected_size:
             return "downloaded", dest, size, sha256_of(dest)
         if rc == 0 and expected_size < 0:
             return "downloaded_size_unverified", dest, size, sha256_of(dest)
-        if rc == 0 and expected_size > 0 and size > expected_size:
-            # resume on a changed/corrupt partial file: start over
+        if rc == 33 and os.path.exists(dest):
+            # server refused the byte-range resume: start this file over
             os.remove(dest)
-        time.sleep(5)
+        time.sleep(5 * (attempt + 1))
     size = os.path.getsize(dest) if os.path.exists(dest) else 0
     return f"FAILED(rc={rc},size={size},expected={expected_size})", dest, size, None
 
