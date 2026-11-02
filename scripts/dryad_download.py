@@ -18,7 +18,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 
 API = "https://datadryad.org"
 
@@ -127,7 +127,7 @@ def main():
                 observed = "unsupported_algo"
         print(f"[{status}] {f['path']}", flush=True)
         with open(prov, "a", encoding="utf-8") as fh:
-            fh.write("\t".join([datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), f["path"], f["download"],
+            fh.write("\t".join([datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), f["path"], f["download"],
                                 str(f["size"]), f["digest_type"] or "", f["digest"] or "", observed, status]) + "\n")
 
 

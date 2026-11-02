@@ -22,7 +22,7 @@ import sys
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 
 GEO_FTP = "https://ftp.ncbi.nlm.nih.gov/geo/series"
 UA = {"User-Agent": "Mozilla/5.0 (spatial_TCR download scripts; contact via GEO)"}
@@ -234,7 +234,7 @@ def main():
                 status, dest, size, digest = f.result()
                 print(f"   [{status}] {os.path.basename(dest)} {size / 1e9:.3f} GB", flush=True)
                 with open(prov_path, "a", encoding="utf-8") as fh:
-                    fh.write("\t".join([datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), acc, gsm,
+                    fh.write("\t".join([datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), acc, gsm,
                                         os.path.basename(dest), url, str(size), digest or "",
                                         status]) + "\n")
     print(f"== grand total selected: {grand_total / 1e9:.2f} GB")
