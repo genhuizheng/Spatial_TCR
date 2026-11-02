@@ -140,6 +140,29 @@ def sha256_of(path, bufsize=16 * 1024 * 1024):
     return h.hexdigest()
 
 
+def signature_ok(path):
+    """Cheap content check by file type. A NCBI error page written at the start of
+    a file and then completed by a byte-range resume has exactly the right size but
+    the wrong first bytes, so size alone cannot catch it."""
+    name = path.lower()
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(512)
+    except OSError:
+        return False
+    if os.path.getsize(path) == 0:
+        return True  # genuinely empty author uploads exist (GSM7658221)
+    if name.endswith(".gz") or name.endswith(".tgz"):
+        return head[:2] == b"\x1f\x8b"
+    if name.endswith((".h5", ".h5ad", ".hdf5")):
+        return head[:8] == b"\x89HDF\r\n\x1a\n"
+    if name.endswith(".tar"):
+        return head[257:262] == b"ustar"
+    if name.endswith(".zip"):
+        return head[:4] == b"PK\x03\x04"
+    return not head.lstrip().startswith((b"<?xml", b"<!DOCTYPE", b"<html"))
+
+
 def download_one(item, out_dir, expected_size):
     """Download with curl resume. Returns (status, local_path, size, sha256)."""
     gsm, url = item
@@ -148,7 +171,10 @@ def download_one(item, out_dir, expected_size):
     if expected_size < 0:
         expected_size = head_size(url)  # second chance after the bulk HEAD pass
     if expected_size > 0 and os.path.exists(dest) and os.path.getsize(dest) == expected_size:
-        return "cached", dest, expected_size, None
+        if signature_ok(dest):
+            return "cached", dest, expected_size, None
+        print(f"   [bad signature, re-downloading] {fname}", flush=True)
+        os.remove(dest)
 
     def drop_stale():
         """Remove a leftover that cannot be resumed: bigger than the real file, or a
@@ -169,6 +195,10 @@ def download_one(item, out_dir, expected_size):
         drop_stale()
         rc = subprocess.call(cmd)
         size = os.path.getsize(dest) if os.path.exists(dest) else 0
+        if rc == 0 and os.path.exists(dest) and not signature_ok(dest):
+            os.remove(dest)  # right size, wrong content (error page at the start): start over
+            time.sleep(5 * (attempt + 1))
+            continue
         if rc == 0 and expected_size >= 0 and size == expected_size:
             return "downloaded", dest, size, sha256_of(dest)
         if rc == 0 and expected_size < 0:
