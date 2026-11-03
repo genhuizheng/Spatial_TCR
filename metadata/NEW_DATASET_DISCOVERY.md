@@ -59,7 +59,7 @@ CDR3-probe preprints (no accession), FR3AK-seq (abstract only).
 |---|---|---|---|
 | GSE328481 | 11 per-chip `.h5ad` | 6.6 GB | small enough to download and inspect for TCR fields |
 | GSE296577 | 20 per-sample tar.gz, Seurat RDS, custom panel, README | 402 GB | read panel + README first |
-| GSE179373 | expression MTX only, no VDJ | 0.2 GB | downgraded: no paired-chain lookup for the brain-mets Visium TCR |
+| GSE179373 | expression MTX only on GEO; VDJ FASTQs are in ENA PRJNA743437 (see below) | 0.2 GB | VDJ for pt15, pt16 and two pools (16/26/27): 8 runs, 9.9 GB |
 | GSE280314 | 3 Xenium outs zips, gene panel, H&E with alignment CSV | 68 GB | check panel for CDR3 targets first |
 | PRJNA742564 | 12 FASTQ (ENA, MD5) | 3.2 GB | downloaded 2026-11-03, all MD5 OK |
 | Zenodo 7961605 | 1 zip (MD5) | 25.6 GB | ready when wanted |
@@ -145,3 +145,26 @@ UMIs, `MATCH`), so this installation and the port reproduce the published method
   (GSE300147, GSM9054481/82); the patient numbers come from different studies.
 - Most UMIs are not TRB (e.g. pt16: 2,083 of 36,376), mainly immunoglobulin chains; downstream
   work uses `chain == TRB` only.
+
+## Matched single-cell TCR for the brain metastasis cohort (2026-11-03)
+
+Correction: GSE179373 has no VDJ files on GEO, but its raw reads in ENA (PRJNA743437, checked
+with the ENA filereport) include 10x VDJ libraries; sample titles end in [GEX], [CITE] or [VDJ].
+VDJ libraries that overlap the Visium patients (`metadata/bm_sctcr_samples.tsv`):
+
+| sample | GSM | patients | cells sorted | runs | GB |
+|---|---|---|---|---|---|
+| sc_pt15 | GSM5416363 | 15 | PD-1+ CD8 | SRR15034101, SRR15034102 | 1.6 |
+| sc_pt16 | GSM5416366 | 16 | PD-1+ CD8 | SRR15034107, SRR15034108 | 4.0 |
+| sc_pool1 | GSM5416372 | 16, 26, 27 | all T cells | SRR15034119, SRR15034120 | 2.5 |
+| sc_pool2 | GSM5416375 | 16, 26, 27 | all T cells | SRR15034125, SRR15034126 | 1.7 |
+
+Patients 5, 14 and 17 also have VDJ but no Visium. Pooled captures were hashtag-multiplexed
+([CITE] libraries, 5.2 GB for the two pools, not downloaded); no hashtag-to-patient table was
+found, so pooled clonotypes are attributed to a patient only when their TRB nt CDR3 occurs in
+exactly one of the pool's patients' Visium data.
+
+- Assembly: MiXCR 4.7.0 preset `10x-sc-xcr-vdj` (`scripts/sctcr_mixcr.slurm`). Cell Ranger, the
+  10x standard and probably the authors' tool (not checked), has no ARM build, and Vista is ARM.
+- Linking: `scripts/link_spot_sctcr.py`, exact TRB CDR3 nucleotide identity; amino-acid-only
+  matches reported but not used; patient-mismatched pairs are the negative control.

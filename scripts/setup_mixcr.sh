@@ -27,6 +27,21 @@ else
     echo "MiXCR 3.0.13 unpacked: $TOOLS/mixcr-3.0.13 (sha256 OK)"
 fi
 
+# MiXCR 4.7.0 for the matched 10x single-cell VDJ libraries (preset 10x-sc-xcr-vdj; 3.0.13
+# has no 10x mode, and Cell Ranger has no ARM build for Vista). Same license key.
+if [ -s mixcr-4.7.0/mixcr.jar ]; then
+    echo "MiXCR 4.7.0 already unpacked: $TOOLS/mixcr-4.7.0"
+else
+    curl -sS -L --fail --retry 5 -o mixcr-4.7.0.zip \
+        https://github.com/milaboratory/mixcr/releases/download/v4.7.0/mixcr-4.7.0.zip
+    got=$(sha256sum mixcr-4.7.0.zip | cut -d' ' -f1)
+    if [ "$got" != 4fde83750f1d1308ba6b7431bcafe98297b361da7e17efc4d072ed935045cac7 ]; then
+        echo "SHA-256 mismatch for mixcr-4.7.0.zip: $got"; rm -f mixcr-4.7.0.zip; exit 1
+    fi
+    unzip -q -d mixcr-4.7.0 mixcr-4.7.0.zip && rm -f mixcr-4.7.0.zip
+    echo "MiXCR 4.7.0 unpacked: $TOOLS/mixcr-4.7.0 (sha256 OK)"
+fi
+
 T=$ROOT/data/ref/spatialTCR_pt16_test
 mkdir -p "$T/mixcr_output"
 cd "$T" || exit 1

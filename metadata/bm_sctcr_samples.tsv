@@ -1,0 +1,5 @@
+sample	gsm	patients	sort	runs
+sc_pt15	GSM5416363	15	PD-1+ CD8 T cells	SRR15034101,SRR15034102
+sc_pt16	GSM5416366	16	PD-1+ CD8 T cells	SRR15034107,SRR15034108
+sc_pool1	GSM5416372	16,26,27	all T cells, pooled capture 1	SRR15034119,SRR15034120
+sc_pool2	GSM5416375	16,26,27	all T cells, pooled capture 2	SRR15034125,SRR15034126
