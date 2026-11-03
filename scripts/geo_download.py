@@ -163,6 +163,17 @@ def signature_ok(path):
     return not head.lstrip().startswith((b"<?xml", b"<!DOCTYPE", b"<html"))
 
 
+VERIFY_GZIP = False  # set by --verify-gzip
+
+
+def gzip_ok(path):
+    """Full decompression test. Only run when --verify-gzip is set, because it reads
+    the whole file (minutes for the multi-GB Xenium morphology images)."""
+    if not VERIFY_GZIP or not path.lower().endswith((".gz", ".tgz")) or os.path.getsize(path) == 0:
+        return True
+    return subprocess.call(["gzip", "-t", path], stderr=subprocess.DEVNULL) == 0
+
+
 def download_one(item, out_dir, expected_size):
     """Download with curl resume. Returns (status, local_path, size, sha256)."""
     gsm, url = item
@@ -171,7 +182,7 @@ def download_one(item, out_dir, expected_size):
     if expected_size < 0:
         expected_size = head_size(url)  # second chance after the bulk HEAD pass
     if expected_size > 0 and os.path.exists(dest) and os.path.getsize(dest) == expected_size:
-        if signature_ok(dest):
+        if signature_ok(dest) and gzip_ok(dest):
             return "cached", dest, expected_size, None
         print(f"   [bad signature, re-downloading] {fname}", flush=True)
         os.remove(dest)
@@ -200,7 +211,10 @@ def download_one(item, out_dir, expected_size):
             time.sleep(5 * (attempt + 1))
             continue
         if rc == 0 and expected_size >= 0 and size == expected_size:
-            return "downloaded", dest, size, sha256_of(dest)
+            # A full-size file that fails gzip -t is kept, not retried: if GEO's own
+            # copy is broken, every retry would fetch the same bytes again.
+            status = "downloaded" if gzip_ok(dest) else "downloaded_BAD_GZIP"
+            return status, dest, size, sha256_of(dest)
         if rc == 0 and expected_size < 0:
             return "downloaded_size_unverified", dest, size, sha256_of(dest)
         if rc == 33 and os.path.exists(dest):
@@ -220,7 +234,11 @@ def main():
     ap.add_argument("--exclude", default=None, help="regex; skip files whose name matches")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--dry-run", action="store_true", help="list and size files, download nothing")
+    ap.add_argument("--verify-gzip", action="store_true",
+                    help="also run gzip -t on cached and downloaded .gz files (slow for large files)")
     args = ap.parse_args()
+    global VERIFY_GZIP
+    VERIFY_GZIP = args.verify_gzip
 
     inc = re.compile(args.include) if args.include else None
     exc = re.compile(args.exclude) if args.exclude else None
