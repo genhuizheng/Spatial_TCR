@@ -116,6 +116,8 @@ MiXCR 3.0.13 `analyze shotgun -s hsa --starting-material rna --align "-OsaveOrig
   replacing `1:N:0` with `2:N:0` and would count nothing on the public FASTQs.
 - MiXCR `shotgun` calls all chains; in the test set only 197 of 2,822 UMIs are TRB (most are
   IGK), so downstream work filters `chain == TRB`.
+- MiXCR 3.0.13 as distributed now (jar rebuilt 2022-07) needs a free academic license key
+  (licensing.milaboratories.com), read from `$HOME/mi.license`. Job 1119390 failed for that reason.
 - Run order on TACC: `bash scripts/setup_mixcr.sh` (login node), then `sbatch
   scripts/visium_tcr.slurm`; the job runs the authors' test set first and stops unless it
   matches their counts.

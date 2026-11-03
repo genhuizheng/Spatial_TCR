@@ -33,6 +33,14 @@ if ! java -Xmx256m -version >/dev/null 2>&1; then
     module load java >/dev/null 2>&1 || module load jdk >/dev/null 2>&1
 fi
 java -Xmx256m -version >/dev/null 2>&1 || { echo "no working java"; exit 1; }
+# The 3.0.13 jar on GitHub was rebuilt in 2022 with a license check (free academic key from
+# licensing.milaboratories.com). Keep the key out of the repo and logs: put it in
+# $HOME/mi.license (chmod 600); MI_LICENSE or MI_LICENSE_FILE already set also work.
+if [ -z "${MI_LICENSE:-}" ] && [ -z "${MI_LICENSE_FILE:-}" ] && [ -s "$HOME/mi.license" ]; then
+    export MI_LICENSE_FILE=$HOME/mi.license
+fi
+[ -n "${MI_LICENSE:-}${MI_LICENSE_FILE:-}" ] || { echo "no MiXCR license: save the key to \$HOME/mi.license"; exit 1; }
+export MI_STAT_DISABLE=1
 MIXCR="java -Xmx$MEM -jar $JAR"
 PY=${PY:-python3}
 echo "$(date) java: $(command -v java)  python: $($PY --version 2>&1)  MiXCR: $JAR"
@@ -64,7 +72,9 @@ for s in $SAMPLES; do
         --assemble "--write-alignments" "$r2" clones > analyze.log 2>&1
     rc=$?
     if [ $rc -ne 0 ] || [ ! -s clones.clns ]; then
-        echo "MiXCR analyze failed (rc=$rc)"; tail -20 analyze.log; cd "$ROOT"; continue
+        echo "MiXCR analyze failed (rc=$rc)"; tail -20 analyze.log
+        if grep -qi "licen" analyze.log; then echo "license problem: stopping (other samples would fail the same way)"; exit 1; fi
+        cd "$ROOT"; continue
     fi
     $MIXCR exportReadsForClones -s clones.clns ../reads/reads.fastq.gz > export_reads.log 2>&1
     cd "$ROOT" || exit 1
