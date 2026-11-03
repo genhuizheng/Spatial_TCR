@@ -100,3 +100,24 @@ bytes were an NCBI XML error page: 3 in GSE179572, 6 in GSE238071, the GSE287301
 Xenium files of GSM9054487/88 in GSE300147. `scripts/repair_bad.sh` re-downloaded them with
 `--verify-gzip`; all 13 are FIXED. The archives for GSE179572, GSE238071, GSE287301, GSE300147
 and geo_meta were rebuilt (job 1117711, all OK).
+
+## Tier A processing: Visium TCR spot calls (2026-11-03)
+
+Published method, reproduced as written (github.com/whhudson/spatialTCR, commit 6347f12):
+MiXCR 3.0.13 `analyze shotgun -s hsa --starting-material rna --align "-OsaveOriginalReads=true"
+--assemble "--write-alignments"` on read 2, `exportReadsForClones -s`, then spot barcode
+(read 1 bases 1-16) and UMI (17-28) joined to each clone read, first read per barcode+UMI counted.
+
+- `scripts/visium_tcr_counts.py` is a Python 3 port of the authors' `combine_counts.py`. Checked
+  locally on the authors' own test set (patient 16, 100k reads): identical to their published
+  `output_counts.txt` (357 clones, 2,822 UMIs, 0 differing spot-clone cells), also after renaming
+  the reads to the ENA naming scheme.
+- Why a port: ENA names mates `SRR15052440.1 1/1` and `.1 1/2`; the original pairs mates by
+  replacing `1:N:0` with `2:N:0` and would count nothing on the public FASTQs.
+- MiXCR `shotgun` calls all chains; in the test set only 197 of 2,822 UMIs are TRB (most are
+  IGK), so downstream work filters `chain == TRB`.
+- Run order on TACC: `bash scripts/setup_mixcr.sh` (login node), then `sbatch
+  scripts/visium_tcr.slurm`; the job runs the authors' test set first and stops unless it
+  matches their counts.
+- Sample sheet: `metadata/visium_tcr_samples.tsv` (SRR15052437-42 = patients 27, 26, 24, 19, 16,
+  15 per ENA sample titles; GSM5420749-54 = pt15, 16, 19, 24, 26, 27).
