@@ -11,7 +11,7 @@ downloads nothing.
 
 ## Ranked short list
 
-1. **GSE179572 + PRJNA742564 (brain metastases, Visium TCRβ). Tier A, ready to download.**
+1. **GSE179572 + PRJNA742564 (brain metastases, Visium TCRβ). Tier A, downloaded 2026-11-03 (12/12 FASTQ MD5 OK).**
    This changes an earlier assessment: GSE179572 was treated as expression-only, but its spatial
    TCR reads are deposited separately as BioProject PRJNA742564.
    - The 6 ENA runs (SRR15052437–42) carry sample titles Patient 15, 16, 19, 24, 26, 27, matching
@@ -61,7 +61,7 @@ CDR3-probe preprints (no accession), FR3AK-seq (abstract only).
 | GSE296577 | 20 per-sample tar.gz, Seurat RDS, custom panel, README | 402 GB | read panel + README first |
 | GSE179373 | expression MTX only, no VDJ | 0.2 GB | downgraded: no paired-chain lookup for the brain-mets Visium TCR |
 | GSE280314 | 3 Xenium outs zips, gene panel, H&E with alignment CSV | 68 GB | check panel for CDR3 targets first |
-| PRJNA742564 | 12 FASTQ (ENA, MD5) | 3.2 GB | ready |
+| PRJNA742564 | 12 FASTQ (ENA, MD5) | 3.2 GB | downloaded 2026-11-03, all MD5 OK |
 | Zenodo 7961605 | 1 zip (MD5) | 25.6 GB | ready when wanted |
 
 Every GEO series again ships a `*_RAW.tar` that repeats the per-sample files; always exclude it.
@@ -92,3 +92,11 @@ Sources: [STAR Protocols PMC9189629](https://www.ncbi.nlm.nih.gov/pmc/articles/P
 [Oliveira 2025 PubMed](https://pubmed.ncbi.nlm.nih.gov/40473992/),
 [CNGB STT0000123](https://db.cngb.org/stomics/project/STT0000123),
 [Stereo-XCR-seq preprint](https://www.biorxiv.org/content/10.1101/2025.01.16.630222.full.pdf).
+
+## Integrity repair (2026-11-02)
+
+Integrity job 1117137 (gzip -t on every file) found 13 files of the correct size whose first
+bytes were an NCBI XML error page: 3 in GSE179572, 6 in GSE238071, the GSE287301 cloupe and 4
+Xenium files of GSM9054487/88 in GSE300147. `scripts/repair_bad.sh` re-downloaded them with
+`--verify-gzip`; all 13 are FIXED. The archives for GSE179572, GSE238071, GSE287301, GSE300147
+and geo_meta were rebuilt (job 1117711, all OK).
