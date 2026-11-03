@@ -123,3 +123,25 @@ MiXCR 3.0.13 `analyze shotgun -s hsa --starting-material rna --align "-OsaveOrig
   matches their counts.
 - Sample sheet: `metadata/visium_tcr_samples.tsv` (SRR15052437-42 = patients 27, 26, 24, 19, 16,
   15 per ENA sample titles; GSM5420749-54 = pt15, 16, 19, 24, 26, 27).
+
+### Result: job 1119475 (2026-11-03, 3 min on one gg node)
+
+The test sample run on TACC also matched the authors' published counts (357 clones, 2,822
+UMIs, `MATCH`), so this installation and the port reproduce the published method. Outputs:
+`outputs/visium_tcr/<sample>/spot_clone_{matrix,long}.tsv` and `outputs/visium_tcr/summary.tsv`.
+
+| sample | R2 reads | aligned | clonotypes (TRB) | UMIs on spots | TRB UMIs in tissue | in-tissue spots with TRB / in-tissue spots |
+|---|---|---|---|---|---|---|
+| pt15 | 509,157 | 9.84% | 334 (57) | 7,383 | 590 | 415 / 2,112 |
+| pt16 | 2,057,866 | 5.76% | 925 (248) | 36,376 | 1,982 | 928 / 1,716 |
+| pt19 | 348,486 | 0.03% | 4 (2) | 5 | 1 | 1 / 946 |
+| pt24 | 754,089 | 3.18% | 204 (87) | 9,392 | 136 | 92 / 1,298 |
+| pt26 | 1,130,748 | 0.07% | 23 (14) | 74 | 21 | 19 / 4,342 |
+| pt27 | 2,993,934 | 1.37% | 365 (194) | 1,713 | 415 | 275 / 2,152 |
+
+- Usable TRB signal: pt16 > pt15 > pt27 > pt24. pt19 and pt26 have essentially no TCR reads
+  (0.03% and 0.07% aligned), so they are not usable for spatial TCR analysis.
+- Brain metastasis "pt19" here is unrelated to the McCord HNSCC pilot Patient 19
+  (GSE300147, GSM9054481/82); the patient numbers come from different studies.
+- Most UMIs are not TRB (e.g. pt16: 2,083 of 36,376), mainly immunoglobulin chains; downstream
+  work uses `chain == TRB` only.
