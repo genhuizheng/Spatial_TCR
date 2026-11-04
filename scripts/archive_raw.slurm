@@ -10,7 +10,7 @@
 
 # Package each dataset folder under data/raw into $DST/<dataset>.tar.zst
 # (falls back to pigz/gzip .tar.gz if zstd is absent). Runs on gh (gg is busy).
-# DST defaults to Corral, /corral/utexas/MCB26031/TCR_raw_data. If Corral is not writable from
+# DST defaults to Corral, /corral/utexas/MCB26031/genhui/TCR_raw_data. If Corral is not writable from
 # the compute node, the job builds into $ROOT/TCR_raw_data_corral instead and prints the
 # login-node command to copy it there.
 # Small files directly in data/raw (provenance tables) are copied to $DST/_toplevel_files.
@@ -29,7 +29,7 @@
 ROOT=${ROOT:-/scratch/10119/ghzheng/spatial_TCR}
 SRC=$ROOT/data/raw
 OLD=$ROOT/TCR_raw_data
-CORRAL=/corral/utexas/MCB26031/TCR_raw_data
+CORRAL=/corral/utexas/MCB26031/genhui/TCR_raw_data
 THREADS=${THREADS:-$(nproc)}
 LEVEL=${LEVEL:-3}
 
