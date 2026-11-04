@@ -191,3 +191,38 @@ Links (exact TRB CDR3 nt, in-tissue spots); `outputs/sctcr_link/` on TACC:
 - 1,137 in-tissue spots now carry a paired TRA. V genes agree for 85-94% of links (Visium read 2
   starts in TRBV framework 3, so its V calls are less certain).
 - pt19 and pt24 have no single-cell data; pt26 links are few because its Visium TRB signal is tiny.
+
+## Panel and hashtag checks (`scripts/data_checks.sh`, 2026-11-04)
+
+- **GSE296577 (GBM Xenium): promoted to Tier A.** The custom 100-gene panel contains per-patient
+  TCR probes named `TCR_P28_<n>` and `TCR_P34_<n>` (only the first 60 matching strings were
+  listed, so other patients may also have probes). TCR probes are features of the same Xenium run
+  as the genes, and the sample tar holds full Xenium outputs (cells, transcripts, boundaries,
+  cell_feature_matrix). The README says the Seurat object carries Tier1/Tier2/Tier1_T
+  annotations, coordinates and "TCR clonotype mapping for expanded T cell clones". Open: the
+  probe-to-CDR3 table is not in the panel files (custom_sequences.csv holds probe sequences only).
+- **GSE280314 (CRC Xenium): Tier C.** The colon add-on panel targets a single clonotype
+  (`Clonotype1_TRB`, `Clonotype1_TRA1`, `Clonotype1_TRA2`), so it cannot support TCR-centred
+  comparisons.
+- **GSE287301 hashtags: present.** The aggregated matrix has 38,606 Gene Expression features and
+  4 Antibody Capture features named `1`-`4` (the four hashtags), over 366,632 barcodes whose
+  suffixes 1-16 follow aggregation.csv (e.g. 9 = chip1pool6, 13 = chip2pool6, 8 = chip2pool16).
+  Per-cell hashtag demultiplexing, then patient_matrix, can therefore assign patients. Patient 19
+  (the Xenium pilot) is hash3 in pool6 and pool16. Demultiplexing itself is not done yet.
+- GSE328481 h5ad inspection: job 1122562 submitted 2026-11-04.
+
+## Xenium pilot shells, branch A (`scripts/xenium_shells.py`, 2026-11-04)
+
+McCord Patient 19 runs 1 and 2 (`metadata/xenium_pilot_samples.tsv`, probe group 240103).
+- Expression: Xenium's own cell assignment (`cell_feature_matrix.h5`), unchanged.
+- TCR calls: a probe passes if detected in >= 5 cells (the detection half of McCord's rule;
+  the T-cell-cluster enrichment half needs annotations and is only reported); a focal cell has
+  >= 1 count of a passing own-patient probe. Other patients' probes are the negative control.
+  Chains are not paired.
+- Shell 0 = the focal cell, always its own row. Physical shells are rings one cell layer wide
+  (default width = median Delaunay edge length) out to 250 um; graph shells are Delaunay hops up
+  to 25. Raw counts are summed per shell, so coarser radius sets (e.g. 25/75/150 um) are sums of
+  rings (`xenium_shell_views.py --merge`). Views `shell0_only`, `outer_only` and
+  `shell0_plus_outer` are row selections of the same files.
+- Tested locally on a synthetic section: every row matched a brute-force recomputation, graph
+  hops matched SciPy shortest paths, and the three views add up. Not yet run on TACC.
