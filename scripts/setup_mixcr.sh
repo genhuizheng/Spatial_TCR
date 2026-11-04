@@ -42,6 +42,24 @@ else
     echo "MiXCR 4.7.0 unpacked: $TOOLS/mixcr-4.7.0 (sha256 OK)"
 fi
 
+# MiXCR 4.x needs Java 11+ (class files are version 55); the Vista system java is 1.8.
+# Eclipse Temurin 17 for ARM (Vista is aarch64), checksum from api.adoptium.net.
+JDK=jdk-17.0.21+9
+if [ -x "$JDK/bin/java" ]; then
+    echo "JDK already unpacked: $TOOLS/$JDK"
+elif [ "$(uname -m)" != aarch64 ]; then
+    echo "not aarch64 ($(uname -m)): fetch the matching Temurin 17 build instead"
+else
+    curl -sS -L --fail --retry 5 -o jdk17.tar.gz \
+        "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.21_9.tar.gz"
+    got=$(sha256sum jdk17.tar.gz | cut -d' ' -f1)
+    if [ "$got" != 3e4eca7ead088f080af1476007decf010a240a1eb4e1e78c54fa32fbcc347084 ]; then
+        echo "SHA-256 mismatch for the JDK: $got"; rm -f jdk17.tar.gz; exit 1
+    fi
+    tar -xzf jdk17.tar.gz && rm -f jdk17.tar.gz
+    echo "JDK unpacked: $TOOLS/$JDK (sha256 OK): $("$JDK/bin/java" -Xmx64m -version 2>&1 | head -1)"
+fi
+
 T=$ROOT/data/ref/spatialTCR_pt16_test
 mkdir -p "$T/mixcr_output"
 cd "$T" || exit 1

@@ -25,17 +25,18 @@ SHEET=metadata/bm_sctcr_samples.tsv
 JAR=$TOOLS/mixcr-4.7.0/mixcr.jar
 [ -s "$JAR" ] || { echo "missing $JAR: run bash scripts/setup_mixcr.sh on the login node"; exit 1; }
 
-if ! java -Xmx256m -version >/dev/null 2>&1; then
-    module load java >/dev/null 2>&1 || module load jdk >/dev/null 2>&1
-fi
-java -Xmx256m -version >/dev/null 2>&1 || { echo "no working java"; exit 1; }
+# MiXCR 4.x needs Java 11+; the system java is 1.8, so use the JDK from setup_mixcr.sh
+JAVA=${JAVA:-$TOOLS/jdk-17.0.21+9/bin/java}
+[ -x "$JAVA" ] || { echo "missing $JAVA: run bash scripts/setup_mixcr.sh on the login node"; exit 1; }
+$JAVA -Xmx256m -version >/dev/null 2>&1 || { echo "$JAVA does not run"; exit 1; }
 if [ -z "${MI_LICENSE:-}" ] && [ -z "${MI_LICENSE_FILE:-}" ] && [ -s "$HOME/mi.license" ]; then
     export MI_LICENSE_FILE=$HOME/mi.license
 fi
 [ -n "${MI_LICENSE:-}${MI_LICENSE_FILE:-}" ] || { echo "no MiXCR license: save the key to \$HOME/mi.license"; exit 1; }
 export MI_STAT_DISABLE=1
-MIXCR="java -Xmx$MEM -jar $JAR"
-echo "$(date) $(java -version 2>&1 | head -1)  MiXCR: $($MIXCR -v 2>&1 | head -1)"
+MIXCR="$JAVA -Xmx$MEM -jar $JAR"
+echo "$(date) $($JAVA -version 2>&1 | head -1)  MiXCR: $($MIXCR -v 2>&1 | head -1)"
+$MIXCR -v >/dev/null 2>&1 || { echo "MiXCR does not start:"; $MIXCR -v 2>&1 | tail -5; exit 1; }
 
 SAMPLES=${SAMPLES:-$(awk -F'\t' 'NR > 1 { print $1 }' "$SHEET")}
 OUT=$ROOT/outputs/sctcr_mixcr
