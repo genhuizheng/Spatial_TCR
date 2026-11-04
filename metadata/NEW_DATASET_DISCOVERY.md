@@ -168,3 +168,26 @@ exactly one of the pool's patients' Visium data.
   10x standard and probably the authors' tool (not checked), has no ARM build, and Vista is ARM.
 - Linking: `scripts/link_spot_sctcr.py`, exact TRB CDR3 nucleotide identity; amino-acid-only
   matches reported but not used; patient-mismatched pairs are the negative control.
+
+### Result: MiXCR job 1120239 + `link_bm_sctcr.sh` (2026-11-04)
+
+Single-cell assembly (MiXCR 4.7.0, JDK 17): sc_pt15 3,172 cells / 813 cell groups (499 with
+TRA+TRB); sc_pt16 8,715 / 3,133 (2,142); sc_pool1 7,135 / 4,793 (3,441); sc_pool2 6,803 / 4,711
+(3,422). Adapter cell counts agree with MiXCR's group table for every group.
+
+Links (exact TRB CDR3 nt, in-tissue spots); `outputs/sctcr_link/` on TACC:
+
+| Visium patient | sc sample | Visium TRB clones linked | TRB UMIs linked |
+|---|---|---|---|
+| pt15 | sc_pt15 | 10 / 22 | 79% |
+| pt16 | sc_pt16 | 66 / 116 | 87% |
+| pt16 | sc_pool1, sc_pool2 | 53, 51 / 116 | 84%, 84% |
+| pt26 | sc_pool1, sc_pool2 | 4, 6 / 7 | 86%, 95% |
+| pt27 | sc_pool1, sc_pool2 | 30, 28 / 85 | 39%, 32% |
+
+- Negative control: all 18 patient-mismatched pairs have 0 nucleotide matches (a few amino-acid-only
+  matches, which are not used), so the links are not chance or public CDR3 sharing.
+- No pooled CDR3 occurs in more than one of patients 16, 26 and 27, so every pooled link is attributed.
+- 1,137 in-tissue spots now carry a paired TRA. V genes agree for 85-94% of links (Visium read 2
+  starts in TRBV framework 3, so its V calls are less certain).
+- pt19 and pt24 have no single-cell data; pt26 links are few because its Visium TRB signal is tiny.
