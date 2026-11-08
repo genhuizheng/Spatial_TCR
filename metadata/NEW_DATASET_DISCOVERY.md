@@ -253,3 +253,19 @@ probes in this section:
 - Delaunay graph shells beyond about 12 hops jump to >1 mm because of long edges across gaps.
 The shell machinery stands; the focal-cell definition must be revisited against McCord's full
 method (their T-cell-cluster enrichment and mismatched-probe controls) before interpretation.
+
+### TCR calls redone after McCord's full rule (`scripts/xenium_tcr_calls.py`, 2026-11-08)
+
+- T label: gene-only clustering (TCR probes and controls excluded), normalize 1e4 + log1p + scale,
+  PCA 30, kNN k = 20, Leiden resolution 0.8 (scanpy; McCord used Seurat, whose default is
+  Louvain). Clusters are labelled by the highest mean z-scored lineage-marker score, printed for
+  checking, and can be overridden with a hand-checked table.
+- McCord rule: >= 5 detecting T-cluster cells and T-cluster enrichment (one-sided Fisher exact,
+  BH FDR < 0.05, own and control probes corrected separately). The same rule on other-patient
+  probes gives the false-pass count.
+- Strict tier (sensitivity): an own probe's T-cell excess (T-cluster detection rate minus non-T
+  rate) must exceed every same-chain other-patient probe on the slide. A plain empirical p cannot
+  work here: with 18 TRB controls its minimum is 1/19 > 0.05.
+- Focal cells are T-cluster cells with a passing own probe; shells carry `focal_strict`, and
+  `xenium_shell_views.py --strict` keeps the strict tier only. Tested on a synthetic section with
+  a real clone, a sticky probe and a cross-detecting control; not yet run on TACC.

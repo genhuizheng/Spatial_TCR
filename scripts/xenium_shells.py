@@ -206,6 +206,8 @@ def main():
     ap.add_argument("--max-radius", type=float, default=250.0, help="outer edge of the last physical ring, um")
     ap.add_argument("--max-hops", type=int, default=25)
     ap.add_argument("--max-edge", type=float, default=None, help="drop Delaunay edges longer than this (um); default keep all")
+    ap.add_argument("--calls", default=None, help="output folder of xenium_tcr_calls.py: use its McCord-rule probes and "
+                    "T-cluster focal cells (tier_mccord) instead of the --min-cells rule; rows get focal_strict")
     args = ap.parse_args()
     t0 = time.time()
     os.makedirs(args.out, exist_ok=True)
@@ -254,8 +256,25 @@ def main():
           f"other-patient probe count (negative control): {other_cells}; T markers used for the descriptor: {markers} "
           f"({tmark.mean():.1%} of all cells)")
 
+    strict_cells = set()
+    if args.calls:
+        def tsv(name):
+            with open(os.path.join(args.calls, name)) as fh:
+                cols = fh.readline().rstrip("\n").split("\t")
+                return [dict(zip(cols, l.rstrip("\n").split("\t"))) for l in fh]
+        ok = {r["probe"] for r in tsv("probe_calls.tsv") if r["class"] == "tcr_own" and r["mccord_pass"] == "yes"}
+        passing = np.array([k for k in own if feats["name"][k] in ok], dtype=int)
+        cc = tsv("cell_calls.tsv")
+        mccord_cells = {r["cell_id"] for r in cc if r["tier_mccord"] == "yes"}
+        strict_cells = {r["cell_id"] for r in cc if r["tier_strict"] == "yes"}
+        print(f"--calls {args.calls}: {len(passing)} own probes pass the McCord rule; focal cells tier_mccord "
+              f"{len(mccord_cells)}, tier_strict {len(strict_cells)}")
     P = (X[:, passing] > 0).astype(np.int8).tocsr()
     tcr_cell = np.asarray(P.sum(axis=1)).ravel() > 0
+    if args.calls:
+        tcr_cell &= np.array([b in mccord_cells for b in barcodes])
+        P = sparse.csr_matrix(P.multiply(tcr_cell[:, None]))
+        P.eliminate_zeros()
     focal = np.where(tcr_cell)[0]
     if not len(focal):
         sys.exit("no focal TCR cells")
@@ -326,13 +345,13 @@ def main():
             else:
                 geo = [None, None, None, None]
             n_c = int(st["n_cells"][i])
-            rows.append([args.sample, barcodes[ci], s, scheme] + geo +
+            rows.append([args.sample, barcodes[ci], "yes" if barcodes[ci] in strict_cells else "no", s, scheme] + geo +
                         [n_c, int(st["n_nonzero"][i]), int(st["gene_total"][i]),
                          None if np.isnan(st["dmed"][i]) else float(st["dmed"][i]),
                          None if np.isnan(st["dmax"][i]) else float(st["dmax"][i]),
                          int(st["n_tcr"][i]) - (1 if s == 0 else 0), int(st["same"][i]) - (1 if s == 0 else 0)])
         write_tsv(os.path.join(args.out, f"shells_{scheme}_rows.tsv"),
-                  ["sample", "focal_cell_id", "shell", "scheme", "r_inner_um", "r_outer_um", "area_um2", "coverage",
+                  ["sample", "focal_cell_id", "focal_strict", "shell", "scheme", "r_inner_um", "r_outer_um", "area_um2", "coverage",
                    "n_cells", "n_cells_with_counts", "gene_counts", "dist_median_um", "dist_max_um",
                    "n_tcr_cells", "n_same_probe_cells"], rows)
         nc = st["n_cells"].reshape(len(focal), n_shell)
@@ -347,7 +366,7 @@ def main():
                 line += f"  {np.median(cov[:, s]):15.2f}"
             print(line)
 
-    cfg = dict(sample=args.sample, prefix=args.prefix, probe_group=args.probe_group, min_cells=args.min_cells,
+    cfg = dict(sample=args.sample, prefix=args.prefix, probe_group=args.probe_group, min_cells=args.min_cells, calls=args.calls,
                width_um=width, width_rule=args.width, n_physical_rings=K, max_radius_um=args.max_radius,
                max_hops=args.max_hops, max_edge_um=args.max_edge, coverage_occupancy_um=occ,
                n_cells=n, n_focal=int(len(focal)), passing_probes=[feats["name"][k] for k in passing],

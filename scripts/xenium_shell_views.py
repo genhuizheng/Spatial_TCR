@@ -10,7 +10,8 @@ physical scheme the edges are radii in um (e.g. 25,75,150 gives (0,25], (25,75],
 fine ring goes to the coarse shell that holds its midpoint, so the effective edges are the ring
 edges nearest to E (reported as r_inner_um / r_outer_um); rings beyond the last edge are dropped.
 For the graph scheme the edges are hop numbers (e.g. 1,3,6).
---pool-outer sums all outer shells of a focal cell into one row. lognorm is recomputed from the
+--pool-outer sums all outer shells of a focal cell into one row. --strict keeps only focal cells
+of the strict tier (focal_strict == yes, from xenium_shells.py --calls). lognorm is recomputed from the
 summed raw counts the same way as in xenium_shells.py.
 
 As a library: rows, raw, lognorm = load(dir, scheme, view, merge=None, pool_outer=False)
@@ -56,13 +57,16 @@ def gene_columns(d):
         return np.array([int(l.split("\t")[0]) for l in fh if l.rstrip("\n").split("\t")[4] == "gene"])
 
 
-def load(d, scheme, view, merge=None, pool_outer=False):
+def load(d, scheme, view, merge=None, pool_outer=False, strict=False):
     if view not in VIEWS:
         raise ValueError(f"view must be one of {VIEWS}")
     rows = read_rows(os.path.join(d, f"shells_{scheme}_rows.tsv"))
     with h5py.File(os.path.join(d, f"shells_{scheme}.h5"), "r") as h5:
         raw = read_csr(h5, "raw")
         lognorm = read_csr(h5, "lognorm")
+    if strict:
+        sel = [i for i, r in enumerate(rows) if r.get("focal_strict") == "yes"]
+        rows, raw, lognorm = [rows[i] for i in sel], raw[sel], lognorm[sel]
     if merge or pool_outer:
         group = []
         for r in rows:
@@ -106,10 +110,14 @@ def main():
     ap.add_argument("--scheme", choices=("physical", "graph"), default="physical")
     ap.add_argument("--merge", default=None)
     ap.add_argument("--pool-outer", action="store_true")
+    ap.add_argument("--strict", action="store_true")
     args = ap.parse_args()
     merge = [float(x) if args.scheme == "physical" else int(x) for x in args.merge.split(",")] if args.merge else None
 
-    res = {v: load(args.dir, args.scheme, v, merge, args.pool_outer) for v in VIEWS}
+    res = {v: load(args.dir, args.scheme, v, merge, args.pool_outer, args.strict) for v in VIEWS}
+    if not res["shell0_plus_outer"][0]:
+        print(f"{args.scheme}: no rows" + (" with focal_strict == yes" if args.strict else ""))
+        sys.exit(0)
     for v, (rows, raw, ln) in res.items():
         shells = sorted({r["shell"] for r in rows})
         print(f"{args.scheme} {v}: {len(rows)} rows, shells {shells[0]}..{shells[-1]} ({len(shells)}), "
