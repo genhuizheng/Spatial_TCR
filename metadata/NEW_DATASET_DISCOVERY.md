@@ -226,3 +226,30 @@ McCord Patient 19 runs 1 and 2 (`metadata/xenium_pilot_samples.tsv`, probe group
   `shell0_plus_outer` are row selections of the same files.
 - Tested locally on a synthetic section: every row matched a brute-force recomputation, graph
   hops matched SciPy shortest paths, and the three views add up. Not yet run on TACC.
+
+## GSE328481 inspection (job 1122562): promoted to Tier A
+
+Each of the 11 per-chip h5ad holds Stereo-seq cell bins with raw counts over 33,021 genes,
+x/y (DNB units) and cell-border polygons, author annotations (`anno` 11 types, `anno2` 41
+subtypes, a bin50 structural annotation incl. Tumor, TLS and PCA clusters) and per-cell
+`TRAcdr3aa` / `TRBcdr3aa` (plus IGH, IGK/L) in obs. TCR, expression and coordinates therefore
+share the cell bin by construction. Open: TCR-positive cells per chip (the smallest chip has only
+a handful of distinct CDR3s), amino-acid CDR3 only, and the DNB-to-um scale (0.5 um assumed).
+
+## First Xenium shell run (job 1130524, 2026-11-08): TCR calls not yet specific
+
+Shells ran for both Patient 19 runs (run1 23,496 cells, run2 59,995) and all view checks passed.
+The probe table shows that "detected in >= 5 cells" does not separate own from other-patient
+probes in this section:
+- Two TRA probes look nonspecific: own `CAINNARLMF_TRA` (842 / 3,441 cells, T-marker fraction
+  0.35 / 0.28) and other-patient `240322_CAAPRGGYSTLTF_TRA` (893 / 1,444 cells, 0.39 / 0.27),
+  both near the background T-marker fraction (0.33 / 0.25).
+- Several other-patient TRA probes are detected in many T-marker-positive cells (e.g.
+  `240322_CAVASGGSYIPTF_TRA` 485 / 1,305 cells, 0.79 / 0.59), as many as the best own TRA probes.
+  Shared J-region sequence (e.g. own `CATEASGGSYIPTF` vs other `CAVASGGSYIPTF`) may explain this
+  cross-detection; not verified.
+- TRB separates better: the top own TRB probes (`CASSLRESSYEQYF` 134 / 354 cells,
+  `CASSGISSNEQFF` 97 / 110) exceed every T-enriched other-patient TRB probe (at most 20 / 62).
+- Delaunay graph shells beyond about 12 hops jump to >1 mm because of long edges across gaps.
+The shell machinery stands; the focal-cell definition must be revisited against McCord's full
+method (their T-cell-cluster enrichment and mismatched-probe controls) before interpretation.
