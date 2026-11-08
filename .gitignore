@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 # SCP bulk-download configs carry signed URLs
 cfg*.txt
+# reports copied down from TACC with scp (TACC keeps its own copies)
+tacc_reports/
