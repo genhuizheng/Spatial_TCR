@@ -119,6 +119,7 @@ if [ -n "${REMOVE_OLD:-}" ] && [ -d "$OLD" ]; then
     fi
 fi
 
-echo "$(date) done"
 column -t -s $'\t' "$MAN"
 du -sh "$DST"
+[ "$DST" != "$CORRAL" ] && echo "NOTE: archives are in $DST, not on Corral; copy them from a login node with scripts/copy_archive_to_corral.sh"
+echo "$(date) done -> $DST"
