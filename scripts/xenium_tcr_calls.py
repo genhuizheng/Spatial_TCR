@@ -42,7 +42,7 @@ import numpy as np
 from scipy.stats import fisher_exact
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from xenium_shells import feature_classes, read_10x_h5, read_parquet, write_tsv  # noqa: E402
+from xenium_shells import PROBE_RE, feature_classes, read_10x_h5, read_parquet, write_tsv  # noqa: E402
 
 LINEAGES = {
     "T": ["CD3D", "CD3E", "CD3G", "CD2", "CD247", "CD8A", "CD4", "TRAC"],
@@ -75,12 +75,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sample", required=True)
     ap.add_argument("--prefix", required=True)
-    ap.add_argument("--probe-group", required=True)
+    ap.add_argument("--probe-group", required=True, help="own TCR probe prefix, or auto (from the file name suffix)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--min-t-cells", type=int, default=5, help="McCord: detected in at least five T cells")
     ap.add_argument("--alpha", type=float, default=0.05, help="BH FDR for T-cluster enrichment")
     ap.add_argument("--resolution", type=float, default=0.8, help="Leiden resolution (Seurat FindClusters default 0.8)")
     ap.add_argument("--labels", default=None, help="TSV cluster<TAB>label overriding the automatic labels")
+    ap.add_argument("--clusters", default=None, help="clusters.tsv from xenium_cluster_all.py (shared across sections); "
+                    "skips per-section clustering and needs --labels")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     import scanpy as sc
@@ -93,74 +95,104 @@ def main():
     keep = set(cells["cell_id"])
     idx = [i for i, b in enumerate(barcodes) if b in keep]
     X = X[idx]; barcodes = [barcodes[i] for i in idx]
-    cls, chain, cdr3, pgroup = feature_classes(feats, args.probe_group)
+    own_group = args.probe_group
+    if own_group == "auto":
+        # own probe group = the TCR probe prefix that the file name's specimen suffix starts with
+        suffix = os.path.basename(args.prefix).split("_")[-1]
+        groups = {m.group(1) for n_, t in zip(feats["name"], feats["feature_type"])
+                  if t == "Gene Expression" for m in [PROBE_RE.match(n_)] if m}
+        cand = sorted((g for g in groups if suffix.startswith(g)), key=len, reverse=True)
+        own_group = cand[0] if cand else None
+        print(f"probe groups on this panel: {', '.join(sorted(groups))}; file suffix {suffix} -> own group {own_group}")
+    cls, chain, cdr3, pgroup = feature_classes(feats, own_group)
     names = np.array(feats["name"])
     gene_cols = np.where(cls == "gene")[0]
     G = X[:, gene_cols].astype(np.float32)
     gtot = np.asarray(G.sum(axis=1)).ravel()
-    clustered = gtot > 0
-    print(f"{args.sample}: {X.shape[0]} cells, {len(gene_cols)} genes; clustering {int(clustered.sum())} cells with gene counts")
-
-    a = ad.AnnData(G[clustered].tocsr())
-    a.var_names = names[gene_cols]
-    a.obs_names = [barcodes[i] for i in np.where(clustered)[0]]
-    sc.pp.normalize_total(a, target_sum=1e4)
-    sc.pp.log1p(a)
-    a.layers["lognorm"] = a.X.copy()
-    sc.pp.scale(a, max_value=10)
-    Z = np.asarray(a.X)
-    n_pcs = min(30, a.n_vars - 1)
-    sc.tl.pca(a, n_comps=n_pcs, random_state=args.seed)
-    sc.pp.neighbors(a, n_neighbors=20, n_pcs=n_pcs, random_state=args.seed)
-    sc.tl.leiden(a, resolution=args.resolution, flavor="igraph", n_iterations=2, random_state=args.seed)
-    a.X = a.layers["lognorm"]
+    n_pcs = None
     used = {}
-    vn = list(a.var_names)
-    for lin, genes in LINEAGES.items():
-        g = [x for x in genes if x in vn]
-        if len(g) >= 2:
-            used[lin] = g
-    lins = list(used)
-    for lin, genes in LINEAGES.items():
-        print(f"   markers {lin:<11} in panel: {','.join(used.get(lin, [x for x in genes if x in vn])) or '-'}"
-              + ("" if lin in used else "  (fewer than 2: lineage not scored)"))
-    if not lins:
-        sys.exit("no lineage has >= 2 marker genes in the panel")
-    S = np.c_[[Z[:, [vn.index(x) for x in used[l]]].mean(axis=1) for l in lins]].T
-    clus = a.obs["leiden"].astype(str).values
-    cl_ids = sorted(set(clus), key=int)
-    auto = {}
-    for c in cl_ids:
-        m_ = S[clus == c].mean(axis=0)
-        auto[c] = lins[int(np.argmax(m_))] if m_.max() > 0 else "unassigned"
-    top = {c: [vn[i] for i in np.argsort(-Z[clus == c].mean(axis=0))[:10]] for c in cl_ids}
-    labels = dict(auto)
-    if args.labels:
-        with open(args.labels) as fh:
-            for line in fh:
-                f = line.rstrip("\n").split("\t")
-                if len(f) >= 2 and f[0] in labels:
-                    labels[f[0]] = f[1]
-    summ = []
-    tm = [x for x in used.get("T", [])]
-    tmark = np.asarray((a.layers["lognorm"][:, [list(a.var_names).index(x) for x in tm]] > 0).sum(axis=1)).ravel() > 0 if tm else np.zeros(a.n_obs, bool)
-    print("   cluster  n_cells  label        auto_label   frac_T_marker  " + "  ".join(f"{l[:6]:>6}" for l in lins))
-    for c in cl_ids:
-        m = clus == c
-        sc_mean = S[m].mean(axis=0)
-        summ.append([c, int(m.sum()), labels[c], auto[c], float(tmark[m].mean())] + [float(v) for v in sc_mean]
-                    + [",".join(top[c])])
-        print(f"   {c:>7}  {int(m.sum()):7d}  {labels[c]:<11}  {auto[c]:<11}  {tmark[m].mean():13.2f}  " +
-              "  ".join(f"{v:6.2f}" for v in sc_mean))
-    write_tsv(os.path.join(args.out, "cluster_summary.tsv"),
-              ["cluster", "n_cells", "label", "auto_label", "frac_T_marker"] + [f"mean_score_{l}" for l in lins]
-              + ["top_genes"], summ)
-    print("   cluster  top genes (mean z-score)")
-    for c in cl_ids:
-        print(f"   {c:>7}  {', '.join(top[c])}")
 
-    cluster_of = np.full(X.shape[0], "", dtype=object)
-    cluster_of[np.where(clustered)[0]] = clus
+    if args.clusters:
+        # shared clusters from xenium_cluster_all.py, labelled by hand (--labels required)
+        if not args.labels:
+            sys.exit("--clusters needs --labels (cluster<TAB>label, checked by hand)")
+        with open(args.labels) as fh:
+            labels = {f[0]: f[1] for f in (l.rstrip("\n").split("\t") for l in fh) if len(f) >= 2 and f[0] != "cluster"}
+        cmap = {}
+        with open(args.clusters) as fh:
+            fh.readline()
+            for l in fh:
+                f = l.rstrip("\n").split("\t")
+                if f[0] == args.sample:
+                    cmap[f[1]] = f[2]
+        cluster_of = np.array([cmap.get(b, "") for b in barcodes], dtype=object)
+        clustered = cluster_of != ""
+        print(f"{args.sample}: {X.shape[0]} cells; {int(clustered.sum())} in the shared clusters ({args.clusters})")
+        for c in sorted(set(cluster_of[clustered]), key=int):
+            print(f"   cluster {c:>3}  {labels.get(c, '?'):<12} {int((cluster_of == c).sum()):7d} cells")
+    else:
+        clustered = gtot > 0
+        print(f"{args.sample}: {X.shape[0]} cells, {len(gene_cols)} genes; clustering {int(clustered.sum())} cells with gene counts")
+        a = ad.AnnData(G[clustered].tocsr())
+        a.var_names = names[gene_cols]
+        a.obs_names = [barcodes[i] for i in np.where(clustered)[0]]
+        sc.pp.normalize_total(a, target_sum=1e4)
+        sc.pp.log1p(a)
+        a.layers["lognorm"] = a.X.copy()
+        sc.pp.scale(a, max_value=10)
+        Z = np.asarray(a.X)
+        n_pcs = min(30, a.n_vars - 1)
+        sc.tl.pca(a, n_comps=n_pcs, random_state=args.seed)
+        sc.pp.neighbors(a, n_neighbors=20, n_pcs=n_pcs, random_state=args.seed)
+        sc.tl.leiden(a, resolution=args.resolution, flavor="igraph", n_iterations=2, random_state=args.seed)
+        a.X = a.layers["lognorm"]
+        used = {}
+        vn = list(a.var_names)
+        for lin, genes in LINEAGES.items():
+            g = [x for x in genes if x in vn]
+            if len(g) >= 2:
+                used[lin] = g
+        lins = list(used)
+        for lin, genes in LINEAGES.items():
+            print(f"   markers {lin:<11} in panel: {','.join(used.get(lin, [x for x in genes if x in vn])) or '-'}"
+                  + ("" if lin in used else "  (fewer than 2: lineage not scored)"))
+        if not lins:
+            sys.exit("no lineage has >= 2 marker genes in the panel")
+        S = np.c_[[Z[:, [vn.index(x) for x in used[l]]].mean(axis=1) for l in lins]].T
+        clus = a.obs["leiden"].astype(str).values
+        cl_ids = sorted(set(clus), key=int)
+        auto = {}
+        for c in cl_ids:
+            m_ = S[clus == c].mean(axis=0)
+            auto[c] = lins[int(np.argmax(m_))] if m_.max() > 0 else "unassigned"
+        top = {c: [vn[i] for i in np.argsort(-Z[clus == c].mean(axis=0))[:10]] for c in cl_ids}
+        labels = dict(auto)
+        if args.labels:
+            with open(args.labels) as fh:
+                for line in fh:
+                    f = line.rstrip("\n").split("\t")
+                    if len(f) >= 2 and f[0] in labels:
+                        labels[f[0]] = f[1]
+        summ = []
+        tm = [x for x in used.get("T", [])]
+        tmark = np.asarray((a.layers["lognorm"][:, [list(a.var_names).index(x) for x in tm]] > 0).sum(axis=1)).ravel() > 0 if tm else np.zeros(a.n_obs, bool)
+        print("   cluster  n_cells  label        auto_label   frac_T_marker  " + "  ".join(f"{l[:6]:>6}" for l in lins))
+        for c in cl_ids:
+            m = clus == c
+            sc_mean = S[m].mean(axis=0)
+            summ.append([c, int(m.sum()), labels[c], auto[c], float(tmark[m].mean())] + [float(v) for v in sc_mean]
+                        + [",".join(top[c])])
+            print(f"   {c:>7}  {int(m.sum()):7d}  {labels[c]:<11}  {auto[c]:<11}  {tmark[m].mean():13.2f}  " +
+                  "  ".join(f"{v:6.2f}" for v in sc_mean))
+        write_tsv(os.path.join(args.out, "cluster_summary.tsv"),
+                  ["cluster", "n_cells", "label", "auto_label", "frac_T_marker"] + [f"mean_score_{l}" for l in lins]
+                  + ["top_genes"], summ)
+        print("   cluster  top genes (mean z-score)")
+        for c in cl_ids:
+            print(f"   {c:>7}  {', '.join(top[c])}")
+
+        cluster_of = np.full(X.shape[0], "", dtype=object)
+        cluster_of[np.where(clustered)[0]] = clus
     label_of = np.array([labels.get(c, "unclustered") if c else "unclustered" for c in cluster_of], dtype=object)
     isT = label_of == "T"
     write_tsv(os.path.join(args.out, "clusters.tsv"), ["cell_id", "cluster", "label", "gene_counts"],
@@ -231,7 +263,7 @@ def main():
     nonT = sum(1 for r in cr if r[3] and r[6] == "no")
     print(f"focal TCR cells: tier_mccord {nm}, tier_strict {ns}; cells with a passing own probe outside the T cluster: {nonT}")
     with open(os.path.join(args.out, "calls_config.json"), "w") as fh:
-        json.dump(dict(sample=args.sample, prefix=args.prefix, probe_group=args.probe_group, min_t_cells=args.min_t_cells,
+        json.dump(dict(sample=args.sample, prefix=args.prefix, probe_group=own_group, clusters_file=args.clusters, min_t_cells=args.min_t_cells,
                        alpha=args.alpha, strict_rule="T excess > every same-chain control", resolution=args.resolution, n_pcs=n_pcs,
                        n_neighbors=20, labels_file=args.labels, lineage_markers_used=used, seed=args.seed,
                        scanpy=sc.__version__, anndata=ad.__version__,

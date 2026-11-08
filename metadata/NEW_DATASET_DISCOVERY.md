@@ -269,3 +269,19 @@ method (their T-cell-cluster enrichment and mismatched-probe controls) before in
 - Focal cells are T-cluster cells with a passing own probe; shells carry `focal_strict`, and
   `xenium_shell_views.py --strict` keeps the strict tier only. Tested on a synthetic section with
   a real clone, a sticky probe and a cross-detecting control; not yet run on TACC.
+
+### Reproducing McCord et al.'s probe validation on all 18 sections (2026-11-08)
+
+Published targets (main text): "70 TCR-targeting probes", "61 validated probes present in over
+2,000 T cells in eight patients", "Six of seven samples yielded successful TCR probes in both
+runs", ten unsupervised clusters over all sections, and mismatched sample-probe combinations as
+negative controls ("specifically detected in T cells from the corresponding patient tissue but not
+in mismatched samples"). Per-patient numbers are only in the supplement (Supplementary Table 3,
+Supplementary Figures), which PMC serves behind a bot check and Europe PMC does not release (not
+open access); the user can download it in a browser.
+For scale: the first Patient 19 run already had 425 + 581 T-cluster cells under the McCord rule,
+so the counts are not low against the paper's >2,000 over eight patients.
+Pipeline: `xenium_cluster_all.py` (joint Leiden over all sections, resolution chosen to give ~10
+clusters, hand labels), `xenium_tcr_calls.py --clusters --labels --probe-group auto`, and
+`xenium_probe_validation.py` (headline numbers plus each probe's detection in mismatched tissue),
+run by `scripts/xenium_validation.slurm` in two stages. Tested on synthetic sections.
