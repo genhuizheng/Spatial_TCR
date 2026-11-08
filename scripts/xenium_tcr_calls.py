@@ -11,9 +11,12 @@ threshold was published. This script reproduces that rule:
   1. Clusters: genes only (TCR probes and controls excluded, so the T label is TCR-independent);
      normalize_total 1e4, log1p, scale (max 10), PCA 30, kNN graph (k = 20, 30 PCs), Leiden
      (scanpy; Seurat's default is Louvain, so this is a documented deviation). Cells without gene
-     counts are not clustered. Each cluster is labelled with the lineage whose marker score (mean
+     counts are not clustered. A proposed label per cluster is the lineage whose marker score (mean
      z-scored log expression of that lineage's markers present in the panel, >= 2 needed) is
-     highest on average; --labels overrides this with a hand-checked cluster -> label table.
+     highest on average, or "unassigned" if no lineage scores above the section average (> 0).
+     The top genes of each cluster are printed so that the labels can be checked by hand, as
+     McCord et al. did ("confirming localization of lineage-defining transcripts"); --labels
+     overrides the proposal with a hand-checked cluster -> label table.
   2. Probe rule (McCord): detected (count >= 1) in >= --min-t-cells T-cluster cells and enriched in
      T-cluster cells over other clustered cells (one-sided Fisher exact test, Benjamini-Hochberg
      FDR < --alpha, computed separately for own and other-patient probes).
@@ -44,13 +47,14 @@ from xenium_shells import feature_classes, read_10x_h5, read_parquet, write_tsv 
 LINEAGES = {
     "T": ["CD3D", "CD3E", "CD3G", "CD2", "CD247", "CD8A", "CD4", "TRAC"],
     "B": ["MS4A1", "CD79A", "CD79B", "CD19", "BANK1"],
-    "plasma": ["JCHAIN", "MZB1", "IGHG1", "CD38"],
+    "plasma": ["JCHAIN", "MZB1", "IGHG1", "IGHA1", "IGKC", "XBP1", "PRDM1", "TNFRSF17"],
     "myeloid": ["CD68", "CD163", "CD14", "LYZ", "CSF1R", "ITGAX", "C1QA"],
     "granulocyte": ["CSF3R", "FCGR3B", "CXCR2", "S100A8"],
     "mast": ["TPSAB1", "KIT", "CPA3"],
     "endothelial": ["PECAM1", "VWF", "CDH5", "CLDN5"],
     "fibroblast": ["COL1A1", "COL1A2", "DCN", "LUM", "PDGFRA", "PDGFRB"],
-    "epithelial": ["EPCAM", "KRT5", "KRT14", "KRT17", "KRT8", "KRT18", "SFN"],
+    "epithelial": ["EPCAM", "CDH1", "KRT5", "KRT6A", "KRT7", "KRT14", "KRT15", "KRT17", "KRT19", "KRT8", "KRT18",
+                   "SFN", "TP63", "S100A2", "CEACAM6"],
 }
 
 
@@ -117,12 +121,19 @@ def main():
         if len(g) >= 2:
             used[lin] = g
     lins = list(used)
+    for lin, genes in LINEAGES.items():
+        print(f"   markers {lin:<11} in panel: {','.join(used.get(lin, [x for x in genes if x in vn])) or '-'}"
+              + ("" if lin in used else "  (fewer than 2: lineage not scored)"))
     if not lins:
         sys.exit("no lineage has >= 2 marker genes in the panel")
     S = np.c_[[Z[:, [vn.index(x) for x in used[l]]].mean(axis=1) for l in lins]].T
     clus = a.obs["leiden"].astype(str).values
     cl_ids = sorted(set(clus), key=int)
-    auto = {c: lins[int(np.argmax(S[clus == c].mean(axis=0)))] for c in cl_ids}
+    auto = {}
+    for c in cl_ids:
+        m_ = S[clus == c].mean(axis=0)
+        auto[c] = lins[int(np.argmax(m_))] if m_.max() > 0 else "unassigned"
+    top = {c: [vn[i] for i in np.argsort(-Z[clus == c].mean(axis=0))[:10]] for c in cl_ids}
     labels = dict(auto)
     if args.labels:
         with open(args.labels) as fh:
@@ -137,11 +148,16 @@ def main():
     for c in cl_ids:
         m = clus == c
         sc_mean = S[m].mean(axis=0)
-        summ.append([c, int(m.sum()), labels[c], auto[c], float(tmark[m].mean())] + [float(v) for v in sc_mean])
+        summ.append([c, int(m.sum()), labels[c], auto[c], float(tmark[m].mean())] + [float(v) for v in sc_mean]
+                    + [",".join(top[c])])
         print(f"   {c:>7}  {int(m.sum()):7d}  {labels[c]:<11}  {auto[c]:<11}  {tmark[m].mean():13.2f}  " +
               "  ".join(f"{v:6.2f}" for v in sc_mean))
     write_tsv(os.path.join(args.out, "cluster_summary.tsv"),
-              ["cluster", "n_cells", "label", "auto_label", "frac_T_marker"] + [f"mean_score_{l}" for l in lins], summ)
+              ["cluster", "n_cells", "label", "auto_label", "frac_T_marker"] + [f"mean_score_{l}" for l in lins]
+              + ["top_genes"], summ)
+    print("   cluster  top genes (mean z-score)")
+    for c in cl_ids:
+        print(f"   {c:>7}  {', '.join(top[c])}")
 
     cluster_of = np.full(X.shape[0], "", dtype=object)
     cluster_of[np.where(clustered)[0]] = clus
